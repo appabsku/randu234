@@ -883,6 +883,10 @@
 
         let allItems = [];
 
+        const clientCache = {}; // { sheetKey: { data, ts } } - cache ringan di HP, berlaku 25 detik
+
+        const CLIENT_CACHE_TTL = 25000;
+
         let searchText = '';
 
         let currentSource = '';
@@ -1559,6 +1563,10 @@
 
                         updateBadgeAndStatus(sheetKey);
 
+                    } else {
+
+                        delete clientCache[sheetKey]; // data berubah -> cache lokal jadi basi, hapus
+
                     }
 
                 });
@@ -1721,9 +1729,33 @@
 
         // ===== FETCH & RENDER =====
 
-        async function fetchAndRender(sheetKey) {
+        async function fetchAndRender(sheetKey, forceRefresh) {
 
             if (isFetching) return;
+
+
+            // Pakai cache ringan (25 detik) kalau ada dan belum diminta refresh paksa,
+
+            // supaya pindah tab yang sudah pernah dibuka terasa instan tanpa fetch ulang
+
+            const cached = clientCache[sheetKey];
+
+            if (!forceRefresh && cached && (Date.now() - cached.ts) < CLIENT_CACHE_TTL) {
+
+                allItems = cached.data;
+
+                currentSource = cached.source;
+
+                renderSections(sheetKey);
+
+                updateBadgeAndStatus(sheetKey);
+
+                lastUpdateEl.textContent = new Date(cached.ts).toLocaleTimeString('id-ID');
+
+                return;
+
+            }
+
 
             isFetching = true;
 
@@ -1764,6 +1796,8 @@
                     return { ...item, saldoClass };
 
                 });
+
+                clientCache[sheetKey] = { data: allItems, source: currentSource, ts: Date.now() };
 
                 renderSections(sheetKey);
 
@@ -1979,7 +2013,7 @@
 
         refreshBtnSmall.addEventListener('click', function() {
 
-            if (!isFetching) fetchAndRender(currentSheetKey);
+            if (!isFetching) fetchAndRender(currentSheetKey, true);
 
         });
 
