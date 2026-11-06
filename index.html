@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -155,6 +154,27 @@
             justify-content:space-between;
             gap:8px;
         }
+        /* BARU: baris basil (selalu terlihat di kartu) */
+        .card-row-basil {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+            font-size:12.5px;
+            font-weight:600;
+            color:#8a97a8;
+        }
+        .card-basil-value {
+            font-weight:800;
+            font-size:14.5px;
+            font-variant-numeric:tabular-nums;
+            white-space:nowrap;
+        }
+        .card-basil-value.kol-2 { color:#0b1a2e; }
+        .card-basil-value.kol-3 { color:#2563eb; }
+        .card-basil-value.kol-4 { color:#b91c1c; }
+        .card-basil-value.default { color:#0b2a4a; }
+        .card-item.done .card-row-basil { opacity:.6; }
         .card-meta {
             display:flex;
             align-items:center;
@@ -281,6 +301,7 @@
             .card-main { gap:6px; }
             .card-nama{font-size:14px} .card-kol{font-size:12px;padding:4px 10px;min-width:24px} .card-saldo{font-size:14px}
             .card-jtp{font-size:12px;padding:4px 8px}
+            .card-row-basil{font-size:12px} .card-basil-value{font-size:13.5px}
             .btn-check{width:26px;height:26px;font-size:13px}
             .card-detail { font-size:12px; padding:6px 10px; }
             .card-detail .detail-label { min-width:70px; font-size:12px; }
@@ -294,6 +315,7 @@
             .card-main { gap:5px; }
             .card-nama{font-size:13px} .card-kol{font-size:11.5px;padding:3px 8px;min-width:20px} .card-saldo{font-size:13px}
             .card-jtp{font-size:11.5px;padding:3px 7px}
+            .card-row-basil{font-size:11.5px} .card-basil-value{font-size:13px}
             .btn-check{width:23px;height:23px;font-size:12px}
             .card-detail { font-size:11px; padding:4px 8px; }
             .card-detail .detail-label { min-width:60px; font-size:11px; }
@@ -304,6 +326,7 @@
             .card-main { gap:10px; }
             .card-nama{font-size:16px} .card-kol{font-size:15px;padding:5px 16px} .card-saldo{font-size:17px}
             .card-jtp{font-size:14.5px;padding:6px 12px}
+            .card-row-basil{font-size:14px} .card-basil-value{font-size:16px}
             .btn-check{width:36px;height:36px;font-size:18px}
             .card-detail { font-size:14px; padding:10px 16px; }
             .card-detail .detail-label { min-width:120px; font-size:14px; }
@@ -688,6 +711,39 @@
             return num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
         }
 
+        // ===== FORMAT BASIL (BARU) =====
+        // Tahan terhadap sel yang isinya TEKS berformat Indonesia (mis. "70.000" atau "1.150.000"),
+        // supaya tidak terbaca sebagai desimal (70.000 -> 70). Kalau sel berisi angka asli
+        // (number), langsung diformat biasa.
+        function parseBasilNumber(value) {
+            if (typeof value === 'number') return value;
+            let s = String(value).trim().replace(/[^0-9.,-]/g, '');
+            if (!s) return NaN;
+            if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) {
+                // format Indonesia: titik = ribuan, koma = desimal
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
+                // format Inggris: koma = ribuan, titik = desimal
+                s = s.replace(/,/g, '');
+            } else {
+                s = s.replace(',', '.');
+            }
+            return parseFloat(s);
+        }
+        function formatBasil(value) {
+            if (value === undefined || value === null || String(value).trim() === '') return '-';
+            const num = parseBasilNumber(value);
+            if (isNaN(num)) return String(value);
+            return num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+        // Cari nilai basil di item JSON dengan nama header apa pun yang mengandung "basil"
+        // (basil, Basil, BASIL, Pot. Basil, dst.), jadi tidak peka huruf besar/kecil.
+        function pickBasil(item) {
+            if (item.basil !== undefined) return item.basil;
+            const key = Object.keys(item).find(k => /basil/i.test(k));
+            return key !== undefined ? item[key] : '';
+        }
+
         // ===== FORMAT TANGGAL =====
         function formatTanggalIndonesia(dateStr) {
             if (!dateStr || dateStr === '-' || dateStr.trim() === '') return '-';
@@ -863,6 +919,7 @@
                 const kol = item.Kol ?? item.kol ?? '-';
                 const saldo = item.Saldo ?? item.saldo ?? 0;
                 const sudahBayar = item.sudahbayar === true || item.sudahbayar === 'TRUE' || item.sudahbayar === 'true';
+                const basil = pickBasil(item); // BARU: ambil kolom basil (kolom I)
                 return {
                     id: item._row,
                     row: item._row,
@@ -870,6 +927,8 @@
                     kol: String(kol).trim(),
                     saldoRaw: saldo,
                     saldoDisplay: formatAngka(saldo),
+                    basilRaw: basil,
+                    basilDisplay: formatBasil(basil),
                     sudahBayar: sudahBayar,
                     _source: 'appsscript',
                     nomor: item['Nomor'] ?? item['no'] ?? item['No'] ?? '-',
@@ -1016,6 +1075,7 @@
             const jtpFormatted = formatTanggalSingkat(item.jtpAngsuran);
             const nomor = escapeHTML(item.nomor || '-');
             const alamat = escapeHTML(item.alamat || '-');
+            const basil = escapeHTML(item.basilDisplay || '-');
 
             return `<div class="card-item ${doneClass}">
                 <div class="card-main">
@@ -1031,9 +1091,14 @@
                         </div>
                         <span class="card-saldo ${cls} ${kolClass}">${escapeHTML(item.saldoDisplay)}</span>
                     </div>
+                    <div class="card-row-basil">
+                        <span>Basil</span>
+                        <span class="card-basil-value ${kolClass}">${basil}</span>
+                    </div>
                 </div>
                 <div class="card-detail">
                     <div class="detail-row"><span class="detail-label">Alamat</span><span class="detail-value">${alamat}</span></div>
+                    <div class="detail-row"><span class="detail-label">Basil</span><span class="detail-value">${basil}</span></div>
                 </div>
             </div>`;
         }
